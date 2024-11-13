@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PLINQSample.Models;
+using System.Collections.Concurrent;
 
 namespace PLINQSample.Controllers
 {
@@ -25,6 +26,18 @@ namespace PLINQSample.Controllers
 
       // Paralel işlem yapar ama UI Thread Blocklar.
 
+      ConcurrentBag<Category> clist = new(); // 5 Milyonluk Kayıt var.
+
+      // bu arkadaş sıralı bir listeye dönüş.
+      // clist.Where(x => x.CategoryName.Contains("c")).AsParallel().AsSequential().ToList();
+
+      // bu kaydın paralelde ram üzerinde yönetimini sağlar.
+      //clist.Where(x => x.CategoryName.Contains("c")).AsParallel().AsOrdered().ForAll(item =>
+      //{
+
+      //});
+
+      // unordered olarak çalışır
       Enumerable.Range(0, 20000).AsParallel().WithExecutionMode(ParallelExecutionMode.ForceParallelism).ForAll(x =>
       {
         Console.WriteLine("Thread Paralel: " + Thread.CurrentThread.ManagedThreadId);
@@ -32,12 +45,28 @@ namespace PLINQSample.Controllers
 
       });
 
+      //Enumerable.Range(0, 20000).Where(x => x % 2 == 0).AsParallel().AsOrdered().ForAll(x =>
+      //{
+      //  Console.WriteLine("Thread Paralel: " + Thread.CurrentThread.ManagedThreadId);
+      //  Console.WriteLine("Number:" + x);
+
+      //});
+
+
+      // AsSequential paralel bir ifadenin sıralı IEnumerable tipine dönüşmesi var
+      //Enumerable.Range(0, 20000).Where(x => x % 2 == 0).AsParallel().AsSequential().ToList().ForEach(x =>
+      //{
+      //  Console.WriteLine("Thread Paralel: " + Thread.CurrentThread.ManagedThreadId);
+      //  Console.WriteLine("Number:" + x);
+
+      //});
+
       // Senkron
-      Enumerable.Range(0, 20000).ToList().ForEach(x =>
-      {
-        Console.WriteLine("Thread Sync: " + Thread.CurrentThread.ManagedThreadId);
-        Console.WriteLine("Number:" + x);
-      });
+      //Enumerable.Range(0, 20000).ToList().ForEach(x =>
+      //{
+      //  Console.WriteLine("Thread Sync: " + Thread.CurrentThread.ManagedThreadId);
+      //  Console.WriteLine("Number:" + x);
+      //});
 
       return Ok();
     }
@@ -52,7 +81,7 @@ namespace PLINQSample.Controllers
 
       Task.Run(() =>
       {
-        Enumerable.Range(0, 2000).AsParallel().WithExecutionMode(ParallelExecutionMode.ForceParallelism).ForAll(x =>
+        Enumerable.Range(0, 20000).AsParallel().WithExecutionMode(ParallelExecutionMode.ForceParallelism).ForAll(x =>
         {
           Console.WriteLine("Thread Paralel: " + Thread.CurrentThread.ManagedThreadId);
           Console.WriteLine("Number:" + x);
@@ -85,6 +114,7 @@ namespace PLINQSample.Controllers
     {
       // AsOrdered() performansı düşürür fakat listeyi sıralı olarak verir.
       // WithDegreeOfParallelism: Paralel iş parçacığı sayısını kontrol etmenizi sağlar.
+      // WithDegreeOfParallelism kayıt sayısından eminseniz 15000 kayıt.
 
       Enumerable.Range(0, 30).AsParallel().WithDegreeOfParallelism(4).ForAll(x =>
       {
@@ -101,19 +131,24 @@ namespace PLINQSample.Controllers
     [HttpGet("asParalelQuery")]
     public IActionResult AsParalelQuery()
     {
+      var entities = db.Products.Include(x => x.Category).Include(x => x.Supplier);
 
-      db.Products.Include(x => x.Category).Include(x => x.Supplier).Where(x => x.Category.CategoryName.Contains("Bev")).AsParallel().ForAll(x =>
+      // 1. yöntem daha doğru bir yazım.
+      entities.Where(x => x.Category.CategoryName.Contains("Bev")).AsParallel().ForAll(x =>
       {
         Console.WriteLine($"Ürün: {x.ProductName}  Category: {x.Category.CategoryName}");
 
       });
 
       // Yanlış Sorgu Where olmadan sorgu gider.
-      db.Products.Include(x => x.Category).Include(x => x.Supplier).AsParallel().Where(x => x.Category.CategoryName.Contains("Bev")).ForAll(x =>
-      {
-        Console.WriteLine($"Ürün: {x.ProductName}  Category: {x.Category.CategoryName}");
+      // Not: AsParallel().Where kullandığımızda veri tabanına where düşmeyip sadece program tarafında veritabanından çekilen bilgiyi koşulla göre filtrelemiş oluyoruz.
+     
+      //entities.AsParallel().Where(x => x.Category.CategoryName.Contains("Bev")).ForAll(x =>
+      //{
+      //  Console.WriteLine($"Ürün: {x.ProductName}  Category: {x.Category.CategoryName}");
 
-      });
+      //});
+
 
 
       return Ok();
